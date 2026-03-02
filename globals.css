@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Dark Mode UI - Google Calendar inspired palette */
+:root {
+  --background: #0F172A;
+  --surface: #1E293B;
+  --surface-elevation: #334155;
+  --foreground: #f8fafc;
+  --accent: #7C3AED;
+  --accent-hover: #8B5CF6;
+  --border: #334155;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-assistant), 'Assistant', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* FullCalendar dark theme overrides */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-button-bg-color: transparent;
+  --fc-button-border-color: var(--border);
+  --fc-button-hover-bg-color: var(--surface-elevation);
+  --fc-button-active-bg-color: var(--accent);
+  --fc-button-active-border-color: var(--accent);
+  --fc-now-indicator-color: #EF4444;
+  --fc-event-bg-color: var(--accent);
+  --fc-event-border-color: var(--accent);
+  --fc-today-bg-color: rgba(124, 58, 237, 0.08);
+}
+
+.fc-col-header-cell {
+  background: transparent !important;
+}
+
+/* Current time indicator - sharp red line with circle at RTL start (right side) */
+.fc .fc-timegrid-now-indicator-line {
+  border-width: 2px 0 0 !important;
+  border-color: #EF4444 !important;
+  opacity: 1;
+}
+
+/* Replace arrow with small circle for RTL - circle appears on right (start) */
+.fc-direction-rtl .fc-timegrid-now-indicator-arrow,
+.fc .fc-timegrid-now-indicator-arrow {
+  border: none !important;
+  width: 10px !important;
+  height: 10px !important;
+  margin-top: -5px !important;
+  margin-right: -5px !important;
+  background: #EF4444 !important;
+  border-radius: 50% !important;
+  right: 0 !important;
+  left: auto !important;
+}
+
+.fc-direction-ltr .fc-timegrid-now-indicator-arrow {
+  left: 0 !important;
+  right: auto !important;
+  border: none !important;
+  width: 10px !important;
+  height: 10px !important;
+  margin-top: -5px !important;
+  margin-left: -5px !important;
+  background: #EF4444 !important;
+  border-radius: 50% !important;
+}
