@@ -5,6 +5,7 @@ import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import dayGridPlugin from '@fullcalendar/daygrid'
+import heLocale from '@fullcalendar/core/locales/he'
 
 export default function BarberProDashboard() {
   const [session, setSession] = useState<any>(null)
@@ -12,12 +13,20 @@ export default function BarberProDashboard() {
   const [password, setPassword] = useState('')
   const [appointments, setAppointments] = useState<any[]>([])
   const calendarRef = useRef<any>(null)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) fetchAppointments(session.user.id)
     })
+  }, [])
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   const fetchAppointments = async (barberId: string) => {
@@ -27,7 +36,7 @@ export default function BarberProDashboard() {
         id: app.id,
         title: app.client_name,
         start: app.start_time,
-        color: '#7c3aed',
+        color: '#7C3AED',
         extendedProps: { phone: app.phone, service: app.service }
       })))
     }
@@ -37,7 +46,7 @@ export default function BarberProDashboard() {
     e.preventDefault()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) alert(error.message)
-    else { 
+    else {
       setSession(data.session)
       if (data.session) fetchAppointments(data.session.user.id)
     }
@@ -55,19 +64,43 @@ export default function BarberProDashboard() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center p-4" dir="rtl">
-        <form onSubmit={handleLogin} className="bg-slate-900 p-8 rounded-[2rem] border border-white/10 w-full max-w-md shadow-2xl">
-          <h1 className="text-3xl font-black text-white mb-6 text-center tracking-tighter italic">BARBER OS</h1>
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-[#0F172A] blur-0" />
+        <form
+          onSubmit={handleLogin}
+          className="relative w-full max-w-md rounded-2xl p-8 backdrop-blur-[10px] border border-white/[0.08] shadow-2xl"
+          style={{
+            background: 'rgba(30, 41, 59, 0.6)',
+          }}
+        >
+          <h1 className="text-3xl font-bold text-white mb-6 text-center tracking-tight">
+            BarberBooks
+          </h1>
           <div className="space-y-4 text-right">
             <div>
-              <label className="text-xs text-slate-400 mr-2 mb-1 block">אימייל</label>
-              <input type="email" placeholder="barber@pro.com" className="w-full bg-black border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-all text-right" onChange={(e) => setEmail(e.target.value)} />
+              <label className="text-xs text-slate-400 block mb-1">אימייל</label>
+              <input
+                type="email"
+                placeholder="barber@pro.com"
+                className="w-full bg-white/5 border border-slate-700 p-4 rounded-xl text-white outline-none focus:border-[#7C3AED] transition-all text-right placeholder:text-slate-500"
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mr-2 mb-1 block">סיסמה</label>
-              <input type="password" placeholder="••••••••" className="w-full bg-black border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-all text-right" onChange={(e) => setPassword(e.target.value)} />
+              <label className="text-xs text-slate-400 block mb-1">סיסמה</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="w-full bg-white/5 border border-slate-700 p-4 rounded-xl text-white outline-none focus:border-[#7C3AED] transition-all text-right placeholder:text-slate-500"
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
-            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-500 transition-all shadow-lg mt-2">כניסה למערכת</button>
+            <button
+              type="submit"
+              className="w-full bg-[#7C3AED] hover:bg-[#8B5CF6] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#7C3AED]/20 mt-2"
+            >
+              כניסה למערכת
+            </button>
           </div>
         </form>
       </div>
@@ -75,47 +108,49 @@ export default function BarberProDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#020617] text-slate-100 flex flex-col" dir="rtl">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-xl p-4">
+    <main className="min-h-screen bg-[#0F172A] text-slate-100 flex flex-col">
+      <header className="sticky top-0 z-50 border-b border-slate-800 bg-[#0F172A]/95 backdrop-blur-xl px-4 py-3">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3 font-bold text-xl text-white italic tracking-widest">
-            BARBER OS
+          <div className="flex items-center gap-3 font-bold text-xl text-white tracking-tight">
+            BarberBooks
           </div>
-          <button onClick={() => supabase.auth.signOut().then(() => setSession(null))} className="text-xs text-slate-500 hover:text-red-400 transition-colors">התנתק</button>
+          <button
+            onClick={() => supabase.auth.signOut().then(() => setSession(null))}
+            className="text-sm text-slate-500 hover:text-red-400 transition-colors"
+          >
+            התנתק
+          </button>
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 p-2 md:p-6">
-        <div className="w-full rounded-[1.5rem] border border-white/5 bg-slate-900/40 p-2 md:p-4 shadow-2xl overflow-hidden">
+      <div className="mx-auto flex w-full max-w-7xl flex-1 p-4 md:p-6">
+        <div className="w-full rounded-2xl border border-slate-800 bg-[#1E293B] p-4 md:p-5 overflow-hidden">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
+            initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
             headerToolbar={{
-              left: 'prev,next today',
+              start: 'prev,next',
               center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+              end: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
             titleFormat={{ month: 'long', year: 'numeric' }}
-            locale="he"
+            locale={heLocale}
             direction="rtl"
             firstDay={0}
             slotMinTime="08:00:00"
             slotMaxTime="22:00:00"
-            
-            // הגדרות קריטיות להצגת ה-08:30:
-            slotDuration="00:30:00" 
+            slotDuration="00:30:00"
             slotLabelInterval="00:30"
             slotLabelFormat={{
               hour: '2-digit',
               minute: '2-digit',
-              hour12: false
+              hour12: false,
             }}
-            
-            dayHeaderFormat={{ 
-              weekday: 'short', 
-              day: 'numeric',   
-              omitCommas: true 
+            dayHeaderFormat={{
+              weekday: 'short',
+              day: 'numeric',
+              omitCommas: true,
             }}
             events={appointments}
             allDaySlot={false}
@@ -126,40 +161,104 @@ export default function BarberProDashboard() {
               cancelAppointment(info.event.id, info.event.extendedProps.phone, info.event.title, info.event.startStr)
             }}
             eventContent={(info) => (
-              <div className="p-1 text-white overflow-hidden bg-gradient-to-br from-purple-600 to-indigo-700 h-full rounded-md shadow-lg border-l-4 border-white/30">
-                <div className="text-[10px] font-bold leading-tight truncate text-right">{info.event.title}</div>
-                <div className="text-[9px] opacity-80 truncate text-right">{info.event.extendedProps.service}</div>
+              <div className="p-1.5 text-white overflow-hidden h-full rounded-md text-right border-r-2 border-white/30 bg-gradient-to-l from-[#7C3AED] to-[#6D28D9]">
+                <div className="text-[10px] font-bold leading-tight truncate">{info.event.title}</div>
+                <div className="text-[9px] opacity-90 truncate">{info.event.extendedProps.service}</div>
               </div>
             )}
           />
+
+          <style jsx global>{`
+            .fc {
+              --fc-border-color: #334155;
+              --fc-today-bg-color: rgba(124, 58, 237, 0.08);
+            }
+            .fc .fc-toolbar-title {
+              font-weight: 700;
+              color: white;
+              font-size: 1.25rem;
+            }
+            .fc .fc-col-header-cell {
+              padding: 14px 0;
+              background: rgba(15, 23, 42, 0.5);
+              border-color: #334155 !important;
+            }
+            .fc .fc-col-header-cell-cushion {
+              color: #94a3b8;
+              font-size: 0.875rem;
+            }
+            .fc .fc-timegrid-slot-label-cushion {
+              color: #64748b;
+              font-size: 0.8rem;
+              font-weight: 600;
+              padding-right: 10px;
+            }
+            /* Segmented control - pill-shaped navigation */
+            .fc .fc-toolbar-chunk {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+            }
+            .fc .fc-toolbar-chunk:last-child {
+              background: rgba(51, 65, 85, 0.5);
+              padding: 4px;
+              border-radius: 9999px;
+              border: 1px solid #334155;
+            }
+            .fc .fc-button {
+              background: transparent !important;
+              border: none !important;
+              color: #94a3b8 !important;
+              font-weight: 600 !important;
+              padding: 8px 14px !important;
+              border-radius: 9999px !important;
+              transition: all 0.2s;
+            }
+            .fc .fc-button:hover {
+              color: white !important;
+              background: rgba(124, 58, 237, 0.2) !important;
+            }
+            .fc .fc-button-primary.fc-button-active {
+              background: #7C3AED !important;
+              color: white !important;
+            }
+            .fc .fc-button-group > .fc-button:first-child:not(:last-child) {
+              border-radius: 9999px 0 0 9999px;
+            }
+            .fc .fc-button-group > .fc-button:last-child:not(:first-child) {
+              border-radius: 0 9999px 9999px 0;
+            }
+            .fc .fc-button-group > .fc-button {
+              border-radius: 9999px;
+            }
+            .fc .fc-prev-button,
+            .fc .fc-next-button {
+              background: transparent !important;
+              border: 1px solid #334155 !important;
+              color: #94a3b8 !important;
+              border-radius: 12px !important;
+            }
+            .fc .fc-prev-button:hover,
+            .fc .fc-next-button:hover {
+              background: #334155 !important;
+              color: white !important;
+              border-color: #475569 !important;
+            }
+            .fc-v-event {
+              background: none !important;
+              border: none !important;
+            }
+            .fc-timegrid-slot {
+              height: 4.5rem !important;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+            }
+            .fc-theme-standard th,
+            .fc-theme-standard td {
+              border-color: #334155 !important;
+            }
+          `}</style>
         </div>
       </div>
-
-      <style jsx global>{`
-        .fc { --fc-border-color: rgba(255,255,255,0.05); --fc-today-bg-color: rgba(124, 58, 237, 0.05); }
-        .fc .fc-toolbar-title { font-weight: 800; color: white; font-size: 1.4rem; }
-        .fc .fc-col-header-cell { padding: 15px 0; background: rgba(0,0,0,0.2); border: none !important; }
-        .fc .fc-col-header-cell-cushion { color: #94a3b8; font-size: 0.9rem; }
-        
-        /* עיצוב עמודת השעות בצד */
-        .fc .fc-timegrid-slot-label-cushion { 
-          color: #64748b; 
-          font-size: 0.8rem; 
-          font-weight: 600;
-          padding-left: 10px;
-        }
-        
-        .fc .fc-button-primary { background-color: #1e293b !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 12px !important; font-weight: bold !important; }
-        .fc .fc-button-active { background-color: #3b82f6 !important; border-color: #3b82f6 !important; }
-        
-        .fc-v-event { background: none !important; border: none !important; }
-        
-        /* מגדיל את גובה המשבצת כדי שיהיה מקום לטקסט בחצי שעה */
-        .fc-timegrid-slot { height: 4.5rem !important; border-bottom: 1px solid rgba(255,255,255,0.02) !important; }
-        
-        /* תיקון צבע הטקסט הלבן בראש הטבלה שראינו בתמונות הקודמות */
-        .fc-theme-standard th { border: none !important; }
-      `}</style>
     </main>
   )
 }
