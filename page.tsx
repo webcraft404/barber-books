@@ -15,6 +15,7 @@ export default function BarberProDashboard() {
   const calendarRef = useRef<any>(null)
   const [isMobile, setIsMobile] = useState(false)
 
+  // 1. טעינה ראשונית של המשתמש והתורים
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -22,6 +23,37 @@ export default function BarberProDashboard() {
     })
   }, [])
 
+  // 2. מאזין לעדכונים בזמן אמת (Realtime) מ-Supabase
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const barberId = session.user.id
+
+    // יצירת ערוץ האזנה לטבלת התורים
+    const subscription = supabase
+      .channel('appointments_realtime')
+      .on('postgres_changes', 
+        { 
+          event: '*', // מאזין לכל אירוע (INSERT, UPDATE, DELETE)
+          schema: 'public', 
+          table: 'appointments',
+          filter: `barber_id=eq.${barberId}` // מביא רק עדכונים של הספר הזה!
+        }, 
+        (payload) => {
+          console.log('Realtime update received!', payload)
+          // ברגע שיש שינוי (לקוח קבע או ביטל תור), שואבים את הנתונים מחדש
+          fetchAppointments(barberId)
+        }
+      )
+      .subscribe()
+
+    // ניקוי ההאזנה כשהספר מתנתק או יוצא מהעמוד
+    return () => {
+      supabase.removeChannel(subscription)
+    }
+  }, [session])
+
+  // 3. בדיקת מסך מובייל בשביל תצוגת הקלנדר
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
     checkMobile()
@@ -29,16 +61,30 @@ export default function BarberProDashboard() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  // פונקציית שליפת התורים והמרתם לבלוקים של חצי שעה
   const fetchAppointments = async (barberId: string) => {
-    const { data } = await supabase.from('appointments').select('*').eq('barber_id', barberId)
+    const { data, error } = await supabase.from('appointments').select('*').eq('barber_id', barberId)
+    
+    if (error) {
+      console.error('Error fetching appointments:', error)
+      return
+    }
+
     if (data) {
-      setAppointments(data.map(app => ({
-        id: app.id,
-        title: app.client_name,
-        start: app.start_time,
-        color: '#7C3AED',
-        extendedProps: { phone: app.phone, service: app.service }
-      })))
+      setAppointments(data.map(app => {
+        const startTime = new Date(app.start_time)
+        // חישוב שעת סיום: הוספת 30 דקות בדיוק (30 * 60 * 1000)
+        const endTime = new Date(startTime.getTime() + 30 * 60 * 1000) 
+
+        return {
+          id: app.id,
+          title: app.client_name,
+          start: app.start_time,
+          end: endTime.toISOString(),
+          color: '#7C3AED',
+          extendedProps: { phone: app.phone, service: app.service }
+        }
+      }))
     }
   }
 
