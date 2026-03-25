@@ -37,8 +37,34 @@ interface Appointment {
     phone: string
     service: string
     email?: string
+    barber_name: string
   }
 }
+
+// --- הגדרות רב-דיירות (Multi-Tenancy) ---
+// מילון שמשייך בין ה-UID של המשתמש ב-Supabase לבין צוות הספרים שלו
+const TENANT_CONFIG: Record<string, {name: string, color: string, bgClass: string}[]> = {
+  // הפרופסור
+  'dbb8bc7f-4eec-47f4-813b-422d28c7e39c': [
+    { name: 'נתי', color: '#3b82f6', bgClass: 'bg-[#3b82f6]' }, // כחול
+    { name: 'שי', color: '#ef4444', bgClass: 'bg-[#ef4444]' },  // אדום
+    { name: 'לירן', color: '#10b981', bgClass: 'bg-[#10b981]' }, // ירוק
+    { name: 'עמית', color: '#a855f7', bgClass: 'bg-[#a855f7]' }  // סגול
+  ],
+  // מתן חלבי
+  '667a415c-a755-40b3-9fd3-86ed601853eb': [
+    { name: 'מתן', color: '#3b82f6', bgClass: 'bg-[#3b82f6]' }
+  ],
+  // אדמין ראשי (webcraft404)
+  'e178a4c0-5506-4138-b1b8-d466c159ca29': [
+    { name: 'מנהל מערכת', color: '#f59e0b', bgClass: 'bg-[#f59e0b]' } // כתום
+  ]
+};
+
+// צוות ברירת מחדל למשתמשים חדשים שעוד לא הוגדרו במילון
+const DEFAULT_BARBER = [
+  { name: 'ספר כללי', color: '#64748b', bgClass: 'bg-[#64748b]' }
+];
 
 export default function BarberProDashboard() {
   const [session, setSession] = useState<any>(null)
@@ -46,6 +72,11 @@ export default function BarberProDashboard() {
   const [password, setPassword] = useState('')
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const calendarRef = useRef<FullCalendar>(null)
+  
+  // סטייטים לספרים ולתצוגה (דינמי פר משתמש)
+  const [barbersList, setBarbersList] = useState<{name: string, color: string, bgClass: string}[]>([])
+  const barbersListRef = useRef<{name: string, color: string, bgClass: string}[]>([])
+  const [activeBarbers, setActiveBarbers] = useState<string[]>([])
   
   const [currentView, setCurrentView] = useState('dayGridMonth') 
   const [currentDateTitle, setCurrentDateTitle] = useState('')
@@ -63,31 +94,29 @@ export default function BarberProDashboard() {
 
   const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false)
   const [newEventData, setNewEventData] = useState({
-    name: '', phone: '', email: '', date: '', time: '', service: 'תספורת גברית'
+    name: '', phone: '', email: '', date: '', time: '', service: 'תספורת גברית', barber_name: ''
   })
 
   const [isEventActionModalOpen, setIsEventActionModalOpen] = useState(false)
   
-  // סטייטים לתפריטים ולמערכת ה-SaaS (פרופיל, עיצוב, סטטיסטיקות)
+  // סטייטים לתפריטים ולפרופיל
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
   const [statsTab, setStatsTab] = useState<'menu' | 'monthly' | 'revenue' | 'loyal'>('menu')
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
-  const [userProfile, setUserProfile] = useState({ name: 'Barber', avatarUrl: '' })
+  const [userProfile, setUserProfile] = useState({ name: '', avatarUrl: '' })
   
   const [isDesignModalOpen, setIsDesignModalOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
 
-  // סטייטים לפעולות המרוכזות
+  // פעולות מרוכזות
   const [bulkModalDate, setBulkModalDate] = useState<Date | null>(null)
   const [bulkActionView, setBulkActionView] = useState<'menu' | 'reminders' | 'cancels'>('menu')
   const [bulkQueueIndex, setBulkQueueIndex] = useState(0)
 
-  const clickTimeout = useRef<NodeJS.Timeout | null>(null)
   const eventClickTimeout = useRef<NodeJS.Timeout | null>(null)
 
-  // טעינת עיצוב שומר מסך
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') setIsDarkMode(true);
@@ -102,17 +131,42 @@ export default function BarberProDashboard() {
       setSession(session)
       setIsLoading(false)
       if (session) {
-        fetchAppointments(session.user.id)
-        const meta = session.user.user_metadata;
-        if (meta) {
-          setUserProfile({ 
-            name: meta.display_name || 'BarberBooks', 
-            avatarUrl: meta.avatar_url || '' 
-          })
-        }
+        initUserData(session.user);
       }
     })
   }, [])
+
+  // פונקציה לאתחול נתוני המשתמש כשהוא מתחבר (מנקה זליגות עבר)
+  const initUserData = (user: any) => {
+    const userId = user.id;
+    const currentBarbers = TENANT_CONFIG[userId] || DEFAULT_BARBER;
+    
+    setBarbersList(currentBarbers);
+    barbersListRef.current = currentBarbers;
+    setActiveBarbers(currentBarbers.map(b => b.name));
+    setNewEventData(prev => ({...prev, barber_name: currentBarbers[0].name}));
+
+    // טעינת פרופיל ספציפי למשתמש
+    const meta = user.user_metadata;
+    setUserProfile({ 
+      name: meta?.display_name || '', 
+      avatarUrl: meta?.avatar_url || '' 
+    });
+
+    fetchAppointments(userId);
+  }
+
+  // פונקציית התנתקות חדשה - מנקה לחלוטין את הסטייט כדי למנוע זליגה!
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setAppointments([]);
+    setUserProfile({ name: '', avatarUrl: '' });
+    setBarbersList([]);
+    barbersListRef.current = [];
+    setActiveBarbers([]);
+    setIsProfileMenuOpen(false);
+  }
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -135,27 +189,37 @@ export default function BarberProDashboard() {
         if (startStr.split(':').length === 2) startStr += ':00' 
         const startDate = new Date(startStr)
         const endDate = new Date(startDate.getTime() + 30 * 60000)
+        
+        const bName = app.barber_name || barbersListRef.current[0]?.name || 'ספר';
+        const bColor = barbersListRef.current.find(b => b.name === bName)?.color || '#64748b';
+
         return {
-          id: app.id, title: app.client_name, start: startStr, end: getLocalISOString(endDate), color: '#3b82f6', 
-          extendedProps: { phone: app.phone, service: app.service, email: app.email }
+          id: app.id, title: app.client_name, start: startStr, end: getLocalISOString(endDate), color: bColor, 
+          extendedProps: { phone: app.phone, service: app.service, email: app.email, barber_name: bName }
         }
       }))
     }
   }
 
-  // --- שמירת פרופיל ---
+  const filteredAppointments = appointments.filter(app => {
+    if (barbersListRef.current.length === 0) return true; 
+    return activeBarbers.includes(app.extendedProps.barber_name);
+  });
+
+  const toggleBarberFilter = (name: string) => {
+    setActiveBarbers(prev => 
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    )
+  }
+
   const handleSaveProfile = async () => {
     const { error } = await supabase.auth.updateUser({
       data: { display_name: userProfile.name, avatar_url: userProfile.avatarUrl }
     })
-    if (!error) {
-      setIsProfileModalOpen(false);
-    } else {
-      alert('אירעה שגיאה בשמירת הפרופיל');
-    }
+    if (!error) setIsProfileModalOpen(false);
+    else alert('אירעה שגיאה בשמירת הפרופיל');
   }
 
-  // --- חישובי סטטיסטיקות דינמיים ---
   const now = new Date();
   const currentMonthApps = appointments.filter(a => new Date(a.start).getMonth() === now.getMonth() && new Date(a.start).getFullYear() === now.getFullYear());
   const lastMonthApps = appointments.filter(a => {
@@ -173,10 +237,8 @@ export default function BarberProDashboard() {
   });
   const topClients = Object.entries(clientCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
 
-
-  // --- נתוני פעולות מרוכזות ---
   const bulkAppointments = bulkModalDate 
-    ? appointments.filter(a => {
+    ? filteredAppointments.filter(a => {
         const d = new Date(a.start);
         return d.getDate() === bulkModalDate.getDate() && 
                d.getMonth() === bulkModalDate.getMonth() && 
@@ -191,7 +253,7 @@ export default function BarberProDashboard() {
       const timeStr = new Date(app.start).toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'});
       
       if(bulkActionView === 'reminders') {
-         const msg = `היי ${app.title}, תזכורת מרוכזת לתור שלך למספרה ביום ${dateStr} בשעה ${timeStr}. נשמח לראותך! ✂️`;
+         const msg = `היי ${app.title}, תזכורת לתור שלך למספרה אצל ${app.extendedProps.barber_name} ביום ${dateStr} בשעה ${timeStr}. נשמח לראותך! ✂️`;
          if(app.extendedProps.phone) openWhatsApp(app.extendedProps.phone, msg);
       } else if (bulkActionView === 'cancels') {
          const msg = `היי ${app.title}, לצערנו נאלצנו לבטל את התור שלך למספרה במועד ${dateStr} בשעה ${timeStr}. עמך הסליחה.`;
@@ -227,7 +289,7 @@ export default function BarberProDashboard() {
     if (error) alert(error.message)
     else {
       setSession(data.session)
-      if (data.session) fetchAppointments(data.session.user.id)
+      if (data.session) initUserData(data.session.user)
     }
   }
 
@@ -264,7 +326,7 @@ export default function BarberProDashboard() {
     const hh = String(date.getHours()).padStart(2, '0')
     const min = String(date.getMinutes()).padStart(2, '0')
     setNewEventData({
-      name: '', phone: '', email: '', date: `${yyyy}-${mm}-${dd}`, time: isMonthView ? '09:00' : `${hh}:${min}`, service: 'תספורת גברית'
+      name: '', phone: '', email: '', date: `${yyyy}-${mm}-${dd}`, time: isMonthView ? '09:00' : `${hh}:${min}`, service: 'תספורת גברית', barber_name: barbersListRef.current[0]?.name || ''
     })
     setIsNewEventModalOpen(true)
   }
@@ -276,16 +338,7 @@ export default function BarberProDashboard() {
 
   const handleDateClick = (arg: DateClickArg) => {
     if (currentView === 'dayGridMonth') {
-      if (clickTimeout.current) {
-        clearTimeout(clickTimeout.current);
-        clickTimeout.current = null;
-        goToDateView(arg.dateStr);
-      } else {
-        clickTimeout.current = setTimeout(() => {
-          clickTimeout.current = null;
-          openNewEventModalWithDate(arg.date, true);
-        }, 300);
-      }
+      goToDateView(arg.dateStr);
     } else {
       openNewEventModalWithDate(arg.date, false);
     }
@@ -312,7 +365,7 @@ export default function BarberProDashboard() {
     const dateStr = d.toLocaleDateString('he-IL');
     const timeStr = d.toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'});
     
-    const msg = `היי ${selectedEvent.title}, תזכורת לתור שלך למספרה ביום ${dateStr} בשעה ${timeStr}. נשמח לראותך! ✂️`;
+    const msg = `היי ${selectedEvent.title}, תזכורת לתור שלך אצל ${selectedEvent.extendedProps?.barber_name} ביום ${dateStr} בשעה ${timeStr}. נשמח לראותך! ✂️`;
     openWhatsApp(phone, msg);
     setIsEventActionModalOpen(false);
   }
@@ -368,9 +421,9 @@ export default function BarberProDashboard() {
     }
 
     const newStartString = getLocalISOString(d)
-    const isConflict = appointments.some(app => app.id !== originalApp.id && app.start === newStartString)
+    const isConflict = appointments.some(app => app.id !== originalApp.id && app.extendedProps.barber_name === originalApp.extendedProps.barber_name && app.start === newStartString)
 
-    if (isConflict) { alert('⚠️ כבר קיים תור במועד זה! הפעולה בוטלה.'); dropInfo.revert(); return; }
+    if (isConflict) { alert('⚠️ לספר זה כבר קיים תור במועד זה! הפעולה בוטלה.'); dropInfo.revert(); return; }
 
     const newEndString = getLocalISOString(new Date(d.getTime() + 30 * 60000))
     setAppointments(prev => prev.map(a => a.id === originalApp.id ? { ...a, start: newStartString, end: newEndString } : a))
@@ -419,9 +472,9 @@ export default function BarberProDashboard() {
     if (!originalApp) return;
     
     const newStartString = `${editDate}T${editTime}:00`
-    const isConflict = appointments.some(app => String(app.id) !== String(originalApp.id) && app.start === newStartString)
+    const isConflict = appointments.some(app => String(app.id) !== String(originalApp.id) && app.extendedProps.barber_name === originalApp.extendedProps.barber_name && app.start === newStartString)
 
-    if (isConflict) { alert('⚠️ כבר קיים תור במועד זה! אנא בחר תאריך או שעה אחרים.'); return; }
+    if (isConflict) { alert('⚠️ לספר זה כבר קיים תור במועד זה! אנא בחר תאריך או שעה אחרים.'); return; }
 
     const newStartDate = new Date(newStartString)
     const newEndString = getLocalISOString(new Date(newStartDate.getTime() + 30 * 60000))
@@ -480,21 +533,22 @@ export default function BarberProDashboard() {
     if (!session?.user?.id) return
 
     const newStartString = `${newEventData.date}T${newEventData.time}:00`
-    const isConflict = appointments.some(app => app.start === newStartString)
-    if (isConflict) { alert('⚠️ כבר קיים תור במועד זה! אנא בחר תאריך או שעה אחרים.'); return; }
+    const isConflict = appointments.some(app => app.extendedProps.barber_name === newEventData.barber_name && app.start === newStartString)
+    if (isConflict) { alert('⚠️ לספר זה כבר קיים תור במועד זה! אנא בחר תאריך או שעה אחרים.'); return; }
 
     const newStartDate = new Date(newStartString)
     const tempId = 'temp-' + Date.now()
     const newEndString = getLocalISOString(new Date(newStartDate.getTime() + 30 * 60000))
+    const bColor = barbersListRef.current.find(b => b.name === newEventData.barber_name)?.color || '#3b82f6';
 
     const newApp: Appointment = {
-      id: tempId, title: newEventData.name, start: newStartString, end: newEndString, color: '#3b82f6', 
-      extendedProps: { phone: newEventData.phone, service: newEventData.service, email: newEventData.email }
+      id: tempId, title: newEventData.name, start: newStartString, end: newEndString, color: bColor, 
+      extendedProps: { phone: newEventData.phone, service: newEventData.service, email: newEventData.email, barber_name: newEventData.barber_name }
     }
     setAppointments(prev => [...prev, newApp])
 
     const { data, error } = await supabase.from('appointments').insert([
-      { barber_id: session.user.id, client_name: newEventData.name, phone: newEventData.phone, email: newEventData.email, service: newEventData.service, start_time: newStartString }
+      { barber_id: session.user.id, client_name: newEventData.name, phone: newEventData.phone, email: newEventData.email, service: newEventData.service, start_time: newStartString, barber_name: newEventData.barber_name }
     ]).select()
 
     if (error) {
@@ -516,7 +570,7 @@ export default function BarberProDashboard() {
       } catch (err) { console.error("שגיאה בשליחת המייל:", err); }
     }
 
-    setNewEventData({ name: '', phone: '', email: '', date: '', time: '', service: 'תספורת גברית' })
+    setNewEventData({ name: '', phone: '', email: '', date: '', time: '', service: 'תספורת גברית', barber_name: barbersListRef.current[0]?.name || '' })
     setIsNewEventModalOpen(false)
   }
 
@@ -553,25 +607,32 @@ export default function BarberProDashboard() {
   }
 
   const renderEventContent = (eventInfo: any) => {
+    const bName = eventInfo.event.extendedProps?.barber_name || 'ספר';
+    const phone = eventInfo.event.extendedProps?.phone;
+    const service = eventInfo.event.extendedProps?.service;
+
     if (eventInfo.view.type === 'dayGridMonth') {
       return (
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] w-full overflow-hidden my-[1px] transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-900/40 border-blue-800 text-blue-300 hover:bg-blue-900/60' : 'bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100'}`}>
-          <div className="w-1.5 h-1.5 rounded-full bg-[#3b82f6] shrink-0"></div>
-          <span className="truncate font-medium">{eventInfo.timeText} לקוח: {eventInfo.event.title}</span>
+        <div className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border text-[11px] w-full overflow-hidden my-[1px] transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'}`}>
+          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: eventInfo.event.backgroundColor }}></div>
+          <span className="truncate">
+            <span className="font-extrabold">{bName}:</span> {eventInfo.timeText} {eventInfo.event.title}
+          </span>
         </div>
       )
     }
     
     return (
-      <div className="w-full h-full bg-[#3b82f6] text-white rounded-[4px] px-3 py-1 flex flex-col hover:opacity-90 transition-opacity cursor-pointer shadow-sm border border-blue-600/20" dir="rtl">
-        <div className="text-[13px] font-bold leading-tight flex items-center justify-start gap-1 mb-0.5">
-          <span className="truncate">{eventInfo.event.title}</span>
-          {eventInfo.event.extendedProps?.phone && (
-            <span className="text-blue-100 font-normal text-[12px] whitespace-nowrap">- {eventInfo.event.extendedProps.phone}</span>
+      <div className="w-full h-full text-white rounded-[4px] px-2 py-1 flex flex-col hover:opacity-90 transition-opacity cursor-pointer shadow-sm overflow-hidden" dir="rtl" style={{ backgroundColor: eventInfo.event.backgroundColor, border: `1px solid ${eventInfo.event.backgroundColor}` }}>
+        <div className="text-[12px] leading-tight flex items-center justify-start gap-1 mb-0.5 flex-wrap md:flex-nowrap">
+          <span className="font-extrabold shrink-0">{bName}:</span>
+          <span className="truncate font-medium">{eventInfo.event.title}</span>
+          {phone && (
+            <span className="text-white/90 font-normal text-[11px] shrink-0">- {phone}</span>
           )}
         </div>
-        {eventInfo.event.extendedProps?.service && (
-          <div className="text-[11px] text-blue-100 opacity-90 truncate">{eventInfo.event.extendedProps.service}</div>
+        {service && (
+          <div className="text-[11px] text-white/80 truncate mt-auto">{service}</div>
         )}
       </div>
     )
@@ -605,7 +666,6 @@ export default function BarberProDashboard() {
     )
   }
 
-  // --- צבעים דינמיים לפי ה-Dark Mode ---
   const bgMain = isDarkMode ? 'bg-[#0f172a] text-slate-200 dark-theme' : 'bg-white text-slate-900';
   const bgPanel = isDarkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200';
   const bgInput = isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white focus:border-blue-500' : 'bg-slate-50 border-slate-200 focus:border-blue-500';
@@ -615,13 +675,12 @@ export default function BarberProDashboard() {
   return (
     <div className={`flex h-screen overflow-hidden font-sans ${bgMain}`} dir="rtl">
       
-      {/* סיידבר */}
       <aside className={`w-[300px] flex flex-col shrink-0 z-20 shadow-sm border-l ${bgPanel}`}>
         <div className={`h-[80px] flex items-center justify-center px-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
            <img src="/logo.png" alt="BarberBooks" className="max-h-[56px] max-w-full object-contain" />
         </div>
 
-        <div className="px-6 py-6 flex flex-col gap-6 flex-1 overflow-y-auto">
+        <div className="px-6 py-6 flex flex-col gap-6 flex-1 overflow-y-auto custom-scrollbar">
           <button 
             onClick={handleOpenNewEventFromSidebar}
             className={`flex items-center justify-center w-full py-3 rounded-xl transition-all font-semibold gap-2 shadow-sm border ${isDarkMode ? 'bg-[#0f172a] hover:bg-slate-800 border-slate-700 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'}`}
@@ -630,7 +689,6 @@ export default function BarberProDashboard() {
             <span className="text-lg leading-none">+</span>
           </button>
 
-          {/* מיני קלנדר */}
           <div className="bg-transparent mt-2">
             <div className="flex justify-between items-center mb-4">
               <span className={`font-bold text-sm ${textTitle}`}>{miniCalendarTitle}</span>
@@ -671,7 +729,6 @@ export default function BarberProDashboard() {
             </div>
           </div>
 
-          {/* מערכת החיפוש */}
           <div className="relative z-50">
             <div className="absolute right-3 top-3 text-slate-400">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -699,10 +756,40 @@ export default function BarberProDashboard() {
               </div>
             )}
           </div>
+
+          {barbersList.length > 0 && (
+            <div className="mt-2">
+              <div className={`font-bold text-sm mb-4 flex items-center justify-between ${textTitle}`}>
+                <span>היומנים שלי</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m18 15-6-6-6 6"/></svg>
+              </div>
+              <div className="space-y-3">
+                {barbersList.map(barber => {
+                  const isActive = activeBarbers.includes(barber.name);
+                  return (
+                    <label key={barber.name} className="flex items-center gap-3 cursor-pointer group">
+                      <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${isActive ? barber.bgClass + ' border-transparent' : 'border-slate-300 dark:border-slate-600'}`}>
+                        <input 
+                          type="checkbox" 
+                          className="hidden" 
+                          checked={isActive} 
+                          onChange={() => toggleBarberFilter(barber.name)} 
+                        />
+                        {isActive && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M5 13l4 4L19 7"/></svg>}
+                      </div>
+                      <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'}`}>
+                        {barber.name}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
         </div>
       </aside>
 
-      {/* אזור מרכזי */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className={`h-[80px] flex items-center justify-between px-8 border-b ${bgPanel}`}>
           <div className="flex items-center gap-6">
@@ -718,7 +805,6 @@ export default function BarberProDashboard() {
           </div>
 
           <div className="flex items-center gap-5">
-            {/* בורר תצוגה */}
             <div className="relative group">
               <button className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
                 {currentView === 'timeGridDay' ? 'יום' : currentView === 'timeGridWeek' ? 'שבוע' : 'חודש'}
@@ -731,7 +817,6 @@ export default function BarberProDashboard() {
               </div>
             </div>
             
-            {/* תפריט הפרופיל והאייקון */}
             <div className="relative">
               <div onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} className="w-11 h-11 rounded-full cursor-pointer shadow-md border-2 border-white ring-1 ring-slate-200 flex items-center justify-center font-bold text-lg hover:opacity-90 transition-all overflow-hidden bg-gradient-to-tr from-[#f43f5e] to-[#f97316] text-white">
                 {userProfile.avatarUrl ? (
@@ -746,7 +831,7 @@ export default function BarberProDashboard() {
                   <div className="fixed inset-0 z-[100]" onClick={() => setIsProfileMenuOpen(false)}></div>
                   <div className={`absolute top-full left-0 mt-3 w-56 rounded-2xl shadow-xl z-[110] overflow-hidden text-right py-2 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
                     <div className={`px-5 py-3 border-b mb-1 ${isDarkMode ? 'border-slate-700' : 'border-slate-50'}`}>
-                       <div className={`font-bold ${textTitle}`}>{userProfile.name}</div>
+                       <div className={`font-bold ${textTitle}`}>{userProfile.name || 'משתמש'}</div>
                        <div className={`text-xs ${textMuted}`}>מנהל מערכת</div>
                     </div>
                     <button onClick={() => { setIsProfileMenuOpen(false); setIsProfileModalOpen(true); }} className={`w-full text-right px-5 py-3 font-medium flex items-center justify-end gap-3 transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-50 text-slate-700'}`}>
@@ -758,7 +843,7 @@ export default function BarberProDashboard() {
                     <button onClick={() => { setIsProfileMenuOpen(false); setIsDesignModalOpen(true); }} className={`w-full text-right px-5 py-3 font-medium border-b flex items-center justify-end gap-3 transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-200 border-slate-700' : 'hover:bg-slate-50 text-slate-700 border-slate-50'}`}>
                       הגדרות עיצוב <span className="text-xl">🎨</span>
                     </button>
-                    <button onClick={() => supabase.auth.signOut().then(() => setSession(null))} className={`w-full text-right px-5 py-3 font-medium flex items-center justify-end gap-3 transition-colors ${isDarkMode ? 'hover:bg-red-900/40 text-red-400' : 'hover:bg-red-50 text-red-500'}`}>
+                    <button onClick={handleLogout} className={`w-full text-right px-5 py-3 font-medium flex items-center justify-end gap-3 transition-colors ${isDarkMode ? 'hover:bg-red-900/40 text-red-400' : 'hover:bg-red-50 text-red-500'}`}>
                       התנתקות <span className="text-xl">🚪</span>
                     </button>
                   </div>
@@ -792,7 +877,7 @@ export default function BarberProDashboard() {
             selectable={true}
             slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
             dayHeaderContent={renderDayHeader}
-            events={appointments}
+            events={filteredAppointments}
             allDaySlot={false}
             height="100%"
             nowIndicator={true}
@@ -802,8 +887,6 @@ export default function BarberProDashboard() {
           />
         </div>
       </main>
-
-      {/* ----------------- מודלים ופופאפים ----------------- */}
 
       {/* מודל פרופיל אישי */}
       {isProfileModalOpen && (
@@ -836,7 +919,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל הגדרות עיצוב (Light / Dark) */}
+      {/* מודל הגדרות עיצוב */}
       {isDesignModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[150] p-4">
           <div className={`rounded-3xl w-[350px] shadow-2xl relative p-8 border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -856,7 +939,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל פעולות מרוכזות (כוכב ג'מיני) */}
+      {/* פעולות מרוכזות */}
       {bulkModalDate && bulkActionView !== 'menu' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[200]">
           <div className={`rounded-3xl p-8 w-[400px] shadow-2xl relative border text-center ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -899,7 +982,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל תפריט פעולות ליום שלם */}
+      {/* תפריט פעולות ליום שלם */}
       {bulkModalDate && bulkActionView === 'menu' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[150]">
           <div className={`rounded-3xl p-8 w-[400px] shadow-2xl relative border text-center ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -1028,7 +1111,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל פעולות לתור (דאבל קליק) */}
+      {/* מודל פעולות לתור */}
       {isEventActionModalOpen && selectedEvent && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[130]">
           <div className={`rounded-3xl p-6 w-[450px] shadow-2xl relative border text-center ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -1056,7 +1139,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל יצירת אירוע חדש */}
+      {/* יצירת אירוע חדש ידנית מהמערכת */}
       {isNewEventModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[120]">
           <div className={`rounded-3xl p-6 w-[450px] shadow-2xl relative border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -1067,6 +1150,16 @@ export default function BarberProDashboard() {
             <h3 className="text-xl font-bold mb-6">יצירת תור חדש</h3>
             
             <form onSubmit={handleCreateNewEvent} className="space-y-4">
+              {barbersList.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold mb-1 opacity-80">שם הספר <span className="text-red-500">*</span></label>
+                  <select required value={newEventData.barber_name} onChange={e => setNewEventData({...newEventData, barber_name: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`}>
+                    {barbersList.map(b => (
+                      <option key={b.name} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold mb-1 opacity-80">שם לקוח <span className="text-red-500">*</span></label>
                 <input required type="text" value={newEventData.name} onChange={e => setNewEventData({...newEventData, name: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`} placeholder="לדוגמה: ישראל ישראלי" />
@@ -1103,7 +1196,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל היסטוריית תורים של לקוח מחיפוש */}
+      {/* היסטוריית תורים של לקוח */}
       {isHistoryModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100]">
           <div className={`rounded-3xl p-6 w-[400px] shadow-2xl relative border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
@@ -1123,7 +1216,7 @@ export default function BarberProDashboard() {
                         {app.title}
                         {isLatest && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${isDarkMode ? 'text-emerald-300 bg-emerald-900/50' : 'text-emerald-600 bg-emerald-100/80'}`}>תור קרוב</span>}
                       </div>
-                      <div className="text-sm text-[#3b82f6] font-medium">{d.toLocaleDateString('he-IL')} בשעה {d.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}</div>
+                      <div className="text-sm text-[#3b82f6] font-medium">{d.toLocaleDateString('he-IL')} בשעה {d.toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})} (אצל {app.extendedProps?.barber_name})</div>
                       {app.extendedProps?.service && <div className={`text-sm mt-1 ${textMuted}`}>שירות: {app.extendedProps.service}</div>}
                     </div>
                   )
@@ -1136,7 +1229,7 @@ export default function BarberProDashboard() {
         </div>
       )}
 
-      {/* מודל עריכת תור מתוך ההיסטוריה */}
+      {/* עריכת תור מתוך ההיסטוריה */}
       {editingHistoryEvent && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[110]">
           <div className={`rounded-3xl p-6 w-[350px] shadow-2xl relative border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-100 text-slate-800'}`}>
