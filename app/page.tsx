@@ -28,7 +28,7 @@ const openWhatsApp = (phone: string, message: string) => {
 }
 
 interface Appointment {
-  id: string | number
+  id: string
   title: string
   start: string
   end: string
@@ -194,7 +194,7 @@ export default function BarberProDashboard() {
         const bColor = barbersListRef.current.find(b => b.name === bName)?.color || '#64748b';
 
         return {
-          id: app.id, title: app.client_name, start: startStr, end: getLocalISOString(endDate), color: bColor, 
+          id: String(app.id), title: app.client_name, start: startStr, end: getLocalISOString(endDate), color: bColor, 
           extendedProps: { phone: app.phone, service: app.service, email: app.email, barber_name: bName }
         }
       }))
