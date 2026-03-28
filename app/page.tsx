@@ -9,6 +9,12 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import heLocale from '@fullcalendar/core/locales/he'
 import { EventClickArg, EventDropArg } from '@fullcalendar/core'
 
+const TIME_SLOTS: string[] = []
+for (let h = 8; h <= 22; h++) {
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:00`)
+  TIME_SLOTS.push(`${String(h).padStart(2, '0')}:30`)
+}
+
 const getLocalISOString = (date: Date) => {
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -1181,7 +1187,10 @@ export default function BarberProDashboard() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1 opacity-80">שעה <span className="text-red-500">*</span></label>
-                  <input required type="time" step="1800" value={newEventData.time} onChange={e => setNewEventData({...newEventData, time: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`} />
+                  <select required value={newEventData.time} onChange={e => setNewEventData({...newEventData, time: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`}>
+                      <option value="">בחר שעה</option>
+                      {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                 </div>
               </div>
               <div>
@@ -1244,7 +1253,10 @@ export default function BarberProDashboard() {
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1 opacity-80">שעה</label>
-                <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`} />
+                <select value={editTime} onChange={e => setEditTime(e.target.value)} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`}>
+                    <option value="">בחר שעה</option>
+                    {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
               </div>
               <div className="pt-4 flex flex-col gap-3">
                 <button onClick={handleUpdateHistoryAppointment} className="w-full bg-[#3b82f6] hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-all shadow-md">שמור שינויים</button>
