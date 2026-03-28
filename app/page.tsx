@@ -428,12 +428,10 @@ export default function BarberProDashboard() {
     const newEndString = getLocalISOString(new Date(d.getTime() + 30 * 60000))
     setAppointments(prev => prev.map(a => a.id === originalApp.id ? { ...a, start: newStartString, end: newEndString } : a))
 
-    const { error, data: updResult, count: updCount } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id).select()
+    const { error } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id)
     
-    console.log('[DEBUG] eventDrop update:', { id: originalApp.id, newStartString, error, updatedRows: updResult?.length, updResult });
-    
-    if (error || !updResult || updResult.length === 0) {
-      alert('אירעה שגיאה בשמירת התור במסד הנתונים.' + (error ? ' ' + error.message : ' (0 rows updated)')); dropInfo.revert(); fetchAppointments(session.user.id); return;
+    if (error) {
+      alert('אירעה שגיאה בשמירת התור במסד הנתונים.'); dropInfo.revert(); fetchAppointments(session.user.id); return;
     }
 
     const clientEmail = originalApp.extendedProps.email;
@@ -483,16 +481,9 @@ export default function BarberProDashboard() {
     
     setAppointments(prev => prev.map(a => String(a.id) === String(originalApp.id) ? { ...a, start: newStartString, end: newEndString } : a))
 
-    const { error, data: editResult } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id).select()
+    const { error } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id)
 
-    console.log('[DEBUG] editTime update:', { id: originalApp.id, newStartString, error, updatedRows: editResult?.length, editResult });
-
-    if (error || !editResult || editResult.length === 0) {
-      alert('שגיאה בעדכון התור.' + (error ? ' ' + error.message : ' (0 rows updated)'));
-      fetchAppointments(session!.user.id);
-    }
-    
-    if (!error && editResult && editResult.length > 0) {
+    if (!error) {
       const clientEmail = originalApp.extendedProps.email;
       if (clientEmail) {
         const formatGoogleDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '')
@@ -1190,7 +1181,7 @@ export default function BarberProDashboard() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1 opacity-80">שעה <span className="text-red-500">*</span></label>
-                  <input required type="time" value={newEventData.time} onChange={e => setNewEventData({...newEventData, time: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`} />
+                  <input required type="time" step="1800" value={newEventData.time} onChange={e => setNewEventData({...newEventData, time: e.target.value})} className={`w-full rounded-xl px-4 py-3 outline-none border transition-colors ${bgInput}`} />
                 </div>
               </div>
               <div>
