@@ -428,10 +428,12 @@ export default function BarberProDashboard() {
     const newEndString = getLocalISOString(new Date(d.getTime() + 30 * 60000))
     setAppointments(prev => prev.map(a => a.id === originalApp.id ? { ...a, start: newStartString, end: newEndString } : a))
 
-    const { error } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id)
+    const { error, data: updResult, count: updCount } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id).select()
     
-    if (error) {
-      alert('אירעה שגיאה בשמירת התור במסד הנתונים.'); dropInfo.revert(); fetchAppointments(session.user.id); return;
+    console.log('[DEBUG] eventDrop update:', { id: originalApp.id, newStartString, error, updatedRows: updResult?.length, updResult });
+    
+    if (error || !updResult || updResult.length === 0) {
+      alert('אירעה שגיאה בשמירת התור במסד הנתונים.' + (error ? ' ' + error.message : ' (0 rows updated)')); dropInfo.revert(); fetchAppointments(session.user.id); return;
     }
 
     const clientEmail = originalApp.extendedProps.email;
@@ -481,9 +483,16 @@ export default function BarberProDashboard() {
     
     setAppointments(prev => prev.map(a => String(a.id) === String(originalApp.id) ? { ...a, start: newStartString, end: newEndString } : a))
 
-    const { error } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id)
+    const { error, data: editResult } = await supabase.from('appointments').update({ start_time: newStartString }).eq('id', originalApp.id).select()
 
-    if (!error) {
+    console.log('[DEBUG] editTime update:', { id: originalApp.id, newStartString, error, updatedRows: editResult?.length, editResult });
+
+    if (error || !editResult || editResult.length === 0) {
+      alert('שגיאה בעדכון התור.' + (error ? ' ' + error.message : ' (0 rows updated)'));
+      fetchAppointments(session!.user.id);
+    }
+    
+    if (!error && editResult && editResult.length > 0) {
       const clientEmail = originalApp.extendedProps.email;
       if (clientEmail) {
         const formatGoogleDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '')
