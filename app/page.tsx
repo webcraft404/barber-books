@@ -659,7 +659,7 @@ export default function BarberProDashboard() {
       <div className={`min-h-screen flex items-center justify-center p-4 font-sans ${isDarkMode ? 'bg-[#0f172a]' : 'bg-slate-50'}`} dir="rtl">
         <form onSubmit={handleLogin} className={`w-full max-w-md rounded-3xl p-10 border shadow-2xl transition-all ${isDarkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-100'}`}>
           <div className="flex flex-col items-center justify-center mb-10">
-             <img src="/logo.png" alt="BarberBooks" className="h-16 w-auto object-contain" />
+             <img src="/logo.png" alt="BarberBooks" className={`h-16 w-auto object-contain ${isDarkMode ? 'brightness-[1.8] contrast-[1.1]' : ''}`} />
              <div className="mt-4 text-slate-400 text-sm font-medium">ניהול חכם למספרה שלך</div>
           </div>
           <div className="space-y-6">
@@ -683,7 +683,7 @@ export default function BarberProDashboard() {
       
       <aside className={`w-[300px] flex flex-col shrink-0 z-20 shadow-sm border-l ${bgPanel}`}>
         <div className={`h-[80px] flex items-center justify-center px-6 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-           <img src="/logo.png" alt="BarberBooks" className="max-h-[56px] max-w-full object-contain" />
+           <img src="/logo.png" alt="BarberBooks" className={`max-h-[56px] max-w-full object-contain ${isDarkMode ? 'brightness-[1.8] contrast-[1.1]' : ''}`} />
         </div>
 
         <div className="px-6 py-6 flex flex-col gap-6 flex-1 overflow-y-auto custom-scrollbar">
